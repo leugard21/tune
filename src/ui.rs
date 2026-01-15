@@ -27,6 +27,11 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         let area = centered_rect(60, 60, frame.area());
         render_help_overlay(frame, area);
     }
+
+    if let Some((msg, _)) = &app.status_message {
+        let area = centered_rect(40, 10, frame.area());
+        render_status_overlay(frame, msg, area);
+    }
 }
 
 fn render_playlist(frame: &mut Frame, app: &mut App, area: ratatui::layout::Rect) {
@@ -197,6 +202,21 @@ fn render_help_overlay(frame: &mut Frame, area: ratatui::layout::Rect) {
     let paragraph = Paragraph::new(help_text.join("\n"))
         .block(block)
         .style(Style::default().fg(Color::White));
+
+    frame.render_widget(ratatui::widgets::Clear, area);
+    frame.render_widget(paragraph, area);
+}
+
+fn render_status_overlay(frame: &mut Frame, msg: &str, area: ratatui::layout::Rect) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(" Message ")
+        .border_style(Style::default().fg(Color::Yellow));
+
+    let paragraph = Paragraph::new(msg)
+        .block(block)
+        .style(Style::default().fg(Color::Yellow))
+        .alignment(ratatui::layout::Alignment::Center);
 
     frame.render_widget(ratatui::widgets::Clear, area);
     frame.render_widget(paragraph, area);

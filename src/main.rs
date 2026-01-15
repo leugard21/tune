@@ -19,6 +19,17 @@ use config::Config;
 use scanner::scan_music_directory;
 
 fn main() -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::io::AsRawFd;
+        if let Ok(dev_null) = std::fs::File::create("/dev/null") {
+            let fd = dev_null.as_raw_fd();
+            unsafe {
+                libc::dup2(fd, libc::STDERR_FILENO);
+            }
+        }
+    }
+
     let music_dir = std::env::args().nth(1).map(std::path::PathBuf::from);
     let config = Config::new(music_dir);
 
@@ -49,6 +60,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
         event::handle_events(app)?;
 
         app.check_playback();
+        app.check_status_message();
     }
 
     Ok(())

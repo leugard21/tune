@@ -1,4 +1,4 @@
-use rand::seq::SliceRandom;
+use rand::seq::{IteratorRandom, SliceRandom};
 use ratatui::widgets::ListState;
 
 use crate::player::{PlaybackState, Player};
@@ -42,6 +42,7 @@ pub struct App {
     pub shuffle: bool,
     pub sort_mode: SortMode,
     pub show_help: bool,
+    pub status_message: Option<(String, std::time::Instant)>,
 }
 
 use crate::state::AppState;
@@ -83,6 +84,7 @@ impl App {
             shuffle: state.shuffle,
             sort_mode: state.sort_mode,
             show_help: false,
+            status_message: None,
         }
     }
 
@@ -128,8 +130,13 @@ impl App {
         let index = self.selected();
         let track = &self.tracks[index];
 
-        if self.player.play(&track.path, &track.display_name()).is_ok() {
-            self.playing_index = Some(index);
+        match self.player.play(&track.path, &track.display_name()) {
+            Ok(_) => {
+                self.playing_index = Some(index);
+            }
+            Err(e) => {
+                self.set_status(format!("Error: {}", e));
+            }
         }
     }
 
@@ -166,7 +173,24 @@ impl App {
     }
 
     pub fn toggle_pause(&mut self) {
-        self.player.toggle_pause();
+        match self.player.state {
+            PlaybackState::Playing | PlaybackState::Paused => {
+                self.player.toggle_pause();
+            }
+            PlaybackState::Stopped => {
+                if self.tracks.is_empty() {
+                    return;
+                }
+
+                if self.shuffle {
+                    let mut rng = rand::thread_rng();
+                    let index = (0..self.tracks.len()).choose(&mut rng).unwrap_or(0);
+                    self.list_state.select(Some(index));
+                }
+
+                self.play_selected();
+            }
+        }
     }
 
     pub fn stop(&mut self) {
@@ -256,6 +280,18 @@ impl App {
 
         if self.list_state.selected().is_none() && !self.tracks.is_empty() {
             self.list_state.select(Some(0));
+        }
+    }
+
+    pub fn set_status(&mut self, message: String) {
+        self.status_message = Some((message, std::time::Instant::now()));
+    }
+
+    pub fn check_status_message(&mut self) {
+        if let Some((_, time)) = &self.status_message {
+            if time.elapsed().as_secs() > 3 {
+                self.status_message = None;
+            }
         }
     }
 }
