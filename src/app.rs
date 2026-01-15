@@ -4,11 +4,19 @@ use ratatui::widgets::ListState;
 use crate::player::{PlaybackState, Player};
 use crate::scanner::Track;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RepeatMode {
     Off,
     All,
     One,
+}
+
+impl Default for RepeatMode {
+    fn default() -> Self {
+        Self::Off
+    }
 }
 
 pub struct App {
@@ -19,30 +27,61 @@ pub struct App {
     pub running: bool,
     pub repeat_mode: RepeatMode,
     pub shuffle: bool,
-    pub search_query: String,
-    pub is_searching: bool,
 }
+
+use crate::state::AppState;
 
 impl App {
     pub fn new(tracks: Vec<Track>) -> Self {
+        let state = AppState::load();
+
         let mut list_state = ListState::default();
         if !tracks.is_empty() {
-            list_state.select(Some(0));
+            let initial_index = if let Some(path) = &state.last_track_path {
+                tracks.iter().position(|t| &t.path == path).unwrap_or(0)
+            } else {
+                0
+            };
+            list_state.select(Some(initial_index));
         }
 
-        let player = Player::new().expect("Failed to initialize audio player");
+        let mut player = Player::new().expect("Failed to initialize audio player");
+        player.set_volume(state.volume);
+
+        let playing_index = if !tracks.is_empty() && state.last_track_path.is_some() {
+            let idx = state
+                .last_track_path
+                .as_ref()
+                .and_then(|path| tracks.iter().position(|t| &t.path == path));
+            idx
+        } else {
+            None
+        };
 
         Self {
             tracks,
             list_state,
             player,
-            playing_index: None,
+            playing_index,
             running: true,
-            repeat_mode: RepeatMode::Off,
-            shuffle: false,
-            search_query: String::new(),
-            is_searching: false,
+            repeat_mode: state.repeat_mode,
+            shuffle: state.shuffle,
         }
+    }
+
+    pub fn quit(&mut self) {
+        self.player.stop();
+        self.running = false;
+
+        let last_track_path = self.playing_index.map(|i| self.tracks[i].path.clone());
+
+        let state = AppState {
+            volume: self.player.volume,
+            shuffle: self.shuffle,
+            repeat_mode: self.repeat_mode,
+            last_track_path,
+        };
+        state.save();
     }
 
     pub fn selected(&self) -> usize {
@@ -165,10 +204,5 @@ impl App {
 
     pub fn toggle_shuffle(&mut self) {
         self.shuffle = !self.shuffle;
-    }
-
-    pub fn quit(&mut self) {
-        self.player.stop();
-        self.running = false;
     }
 }

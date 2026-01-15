@@ -3,6 +3,7 @@ mod config;
 mod event;
 mod player;
 mod scanner;
+mod state;
 mod ui;
 
 use std::io;
