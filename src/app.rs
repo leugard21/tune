@@ -60,6 +60,14 @@ impl App {
         }
     }
 
+    pub fn play_next(&mut self) {
+        let current_index = self.playing_index.unwrap_or(0);
+        let next_index = (current_index + 1) % self.tracks.len();
+
+        self.list_state.select(Some(next_index));
+        self.play_selected();
+    }
+
     pub fn toggle_pause(&mut self) {
         self.player.toggle_pause();
     }
@@ -69,10 +77,38 @@ impl App {
         self.playing_index = None;
     }
 
+    pub fn change_volume(&mut self, increase: bool) {
+        if increase {
+            self.player.increase_volume();
+        } else {
+            self.player.decrease_volume();
+        }
+    }
+
+    pub fn seek_forward(&mut self) {
+        let current = self.player.position();
+        let new_pos = current + std::time::Duration::from_secs(5);
+        self.player.seek(new_pos);
+    }
+
+    pub fn seek_backward(&mut self) {
+        let current = self.player.position();
+        if current.as_secs() > 5 {
+            let new_pos = current - std::time::Duration::from_secs(5);
+            self.player.seek(new_pos);
+        } else {
+            self.player.seek(std::time::Duration::ZERO);
+        }
+    }
+
     pub fn check_playback(&mut self) {
         if self.player.is_finished() {
-            self.playing_index = None;
-            self.player.state = PlaybackState::Stopped;
+            if !self.tracks.is_empty() {
+                self.play_next();
+            } else {
+                self.playing_index = None;
+                self.player.state = PlaybackState::Stopped;
+            }
         }
     }
 

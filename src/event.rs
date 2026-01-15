@@ -21,7 +21,6 @@ fn handle_key(app: &mut App, code: KeyCode) {
         KeyCode::Char('q') => app.quit(),
 
         KeyCode::Up | KeyCode::Char('k') => app.select_previous(),
-
         KeyCode::Down | KeyCode::Char('j') => app.select_next(),
 
         KeyCode::Enter => app.play_selected(),
@@ -29,6 +28,12 @@ fn handle_key(app: &mut App, code: KeyCode) {
         KeyCode::Char(' ') => app.toggle_pause(),
 
         KeyCode::Char('s') => app.stop(),
+
+        KeyCode::Char('+') | KeyCode::Char('=') => app.change_volume(true),
+        KeyCode::Char('-') => app.change_volume(false),
+
+        KeyCode::Right => app.seek_forward(),
+        KeyCode::Left => app.seek_backward(),
 
         _ => {}
     }

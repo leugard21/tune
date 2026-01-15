@@ -96,9 +96,15 @@ fn render_now_playing(frame: &mut Frame, app: &App, area: ratatui::layout::Rect)
     let elapsed_secs = position.as_secs();
     let elapsed_mins = elapsed_secs / 60;
     let elapsed_secs = elapsed_secs % 60;
-    let time_text = format!("{:02}:{:02}", elapsed_mins, elapsed_secs);
 
-    let time_display = Paragraph::new(time_text).style(Style::default().fg(Color::Cyan));
+    let vol_percent = (app.player.volume * 100.0) as u8;
+
+    let stats_text = format!(
+        "{:02}:{:02} | Vol: {}%",
+        elapsed_mins, elapsed_secs, vol_percent
+    );
+
+    let stats_display = Paragraph::new(stats_text).style(Style::default().fg(Color::Cyan));
 
     let block = Block::default()
         .borders(Borders::ALL)
@@ -107,7 +113,7 @@ fn render_now_playing(frame: &mut Frame, app: &App, area: ratatui::layout::Rect)
 
     frame.render_widget(block, area);
     frame.render_widget(info, chunks[0]);
-    frame.render_widget(time_display, chunks[1]);
+    frame.render_widget(stats_display, chunks[1]);
 }
 
 fn render_status_bar(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
@@ -116,7 +122,7 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) 
         String::from("No tracks found")
     } else {
         format!(
-            "Track {} of {} | [Enter] Play | [Space] Pause | [s] Stop | [j/k] Navigate | [q] Quit",
+            "Track {}/{} | [Enter] Play | [Space] Pause | [+/-] Vol | [LR] Seek | [q] Quit",
             app.selected() + 1,
             track_count
         )

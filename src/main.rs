@@ -44,6 +44,8 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
         terminal.draw(|frame| ui::render(frame, app))?;
 
         event::handle_events(app)?;
+
+        app.check_playback();
     }
 
     Ok(())

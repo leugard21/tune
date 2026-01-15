@@ -1,10 +1,8 @@
-use std::fs::File;
-use std::io::BufReader;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use rodio::{Decoder, OutputStream, OutputStreamHandle, Sink};
+use rodio::{Decoder, OutputStream, OutputStreamBuilder, Sink};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum PlaybackState {
@@ -15,42 +13,48 @@ pub enum PlaybackState {
 
 pub struct Player {
     _stream: OutputStream,
-    _stream_handle: OutputStreamHandle,
     sink: Sink,
     pub state: PlaybackState,
     pub current_track: Option<String>,
     elapsed: Arc<Mutex<Duration>>,
+    pub volume: f32,
 }
 
 impl Player {
     pub fn new() -> Result<Self, String> {
-        let (stream, stream_handle) =
-            OutputStream::try_default().map_err(|e| format!("Failed to open audio: {}", e))?;
+        let stream = OutputStreamBuilder::open_default_stream()
+            .map_err(|e| format!("Failed to open audio: {}", e))?;
 
-        let sink =
-            Sink::try_new(&stream_handle).map_err(|e| format!("Failed to create sink: {}", e))?;
+        let sink = Sink::connect_new(stream.mixer());
 
         Ok(Self {
             _stream: stream,
-            _stream_handle: stream_handle,
             sink,
             state: PlaybackState::Stopped,
             current_track: None,
             elapsed: Arc::new(Mutex::new(Duration::ZERO)),
+            volume: 1.0,
         })
     }
 
     pub fn play(&mut self, path: &Path, track_name: &str) -> Result<(), String> {
         self.stop();
 
-        let file = File::open(path).map_err(|e| format!("Failed to open file: {}", e))?;
+        let file_bytes = std::fs::read(path).map_err(|e| format!("Failed to read file: {}", e))?;
+        let byte_len = file_bytes.len() as u64;
+        let cursor = std::io::Cursor::new(file_bytes);
 
-        let source =
-            Decoder::new(BufReader::new(file)).map_err(|e| format!("Failed to decode: {}", e))?;
+        let source = Decoder::builder()
+            .with_data(cursor)
+            .with_seekable(true)
+            .with_byte_len(byte_len)
+            .build()
+            .map_err(|e| format!("Failed to decode: {}", e))?;
 
         *self.elapsed.lock().unwrap() = Duration::ZERO;
 
         self.sink.append(source);
+        self.sink.set_volume(self.volume);
         self.sink.play();
 
         self.state = PlaybackState::Playing;
@@ -79,9 +83,8 @@ impl Player {
         self.current_track = None;
         *self.elapsed.lock().unwrap() = Duration::ZERO;
 
-        if let Ok(sink) = Sink::try_new(&self._stream_handle) {
-            self.sink = sink;
-        }
+        self.sink = Sink::connect_new(self._stream.mixer());
+        self.sink.set_volume(self.volume);
     }
 
     pub fn is_finished(&self) -> bool {
@@ -90,6 +93,23 @@ impl Player {
 
     pub fn position(&self) -> Duration {
         self.sink.get_pos()
+    }
+
+    pub fn set_volume(&mut self, volume: f32) {
+        self.volume = volume.clamp(0.0, 1.0);
+        self.sink.set_volume(self.volume);
+    }
+
+    pub fn increase_volume(&mut self) {
+        self.set_volume(self.volume + 0.1);
+    }
+
+    pub fn decrease_volume(&mut self) {
+        self.set_volume(self.volume - 0.1);
+    }
+
+    pub fn seek(&mut self, duration: Duration) {
+        self.sink.try_seek(duration).ok();
     }
 }
 
