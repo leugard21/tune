@@ -1,7 +1,15 @@
+use rand::seq::SliceRandom;
 use ratatui::widgets::ListState;
 
 use crate::player::{PlaybackState, Player};
 use crate::scanner::Track;
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum RepeatMode {
+    Off,
+    All,
+    One,
+}
 
 pub struct App {
     pub tracks: Vec<Track>,
@@ -9,6 +17,10 @@ pub struct App {
     pub player: Player,
     pub playing_index: Option<usize>,
     pub running: bool,
+    pub repeat_mode: RepeatMode,
+    pub shuffle: bool,
+    pub search_query: String,
+    pub is_searching: bool,
 }
 
 impl App {
@@ -26,6 +38,10 @@ impl App {
             player,
             playing_index: None,
             running: true,
+            repeat_mode: RepeatMode::Off,
+            shuffle: false,
+            search_query: String::new(),
+            is_searching: false,
         }
     }
 
@@ -55,14 +71,38 @@ impl App {
         let index = self.selected();
         let track = &self.tracks[index];
 
-        if self.player.play(&track.path, &track.name).is_ok() {
+        if self.player.play(&track.path, &track.display_name()).is_ok() {
             self.playing_index = Some(index);
         }
     }
 
     pub fn play_next(&mut self) {
-        let current_index = self.playing_index.unwrap_or(0);
-        let next_index = (current_index + 1) % self.tracks.len();
+        if self.tracks.is_empty() {
+            return;
+        }
+
+        let next_index = if self.repeat_mode == RepeatMode::One {
+            self.playing_index.unwrap_or(0)
+        } else if self.shuffle {
+            let mut rng = rand::thread_rng();
+            let current = self.playing_index.unwrap_or(0);
+            let mut indices: Vec<usize> = (0..self.tracks.len()).collect();
+            if indices.len() > 1 {
+                indices.retain(|&x| x != current);
+            }
+            *indices.choose(&mut rng).unwrap_or(&0)
+        } else {
+            let current_index = self.playing_index.unwrap_or(0);
+            if current_index + 1 >= self.tracks.len() {
+                if self.repeat_mode == RepeatMode::All {
+                    0
+                } else {
+                    return;
+                }
+            } else {
+                current_index + 1
+            }
+        };
 
         self.list_state.select(Some(next_index));
         self.play_selected();
@@ -103,13 +143,28 @@ impl App {
 
     pub fn check_playback(&mut self) {
         if self.player.is_finished() {
-            if !self.tracks.is_empty() {
-                self.play_next();
-            } else {
+            let current_index = self.playing_index.unwrap_or(0);
+            let is_last_track = current_index + 1 >= self.tracks.len();
+
+            if !self.shuffle && self.repeat_mode == RepeatMode::Off && is_last_track {
                 self.playing_index = None;
                 self.player.state = PlaybackState::Stopped;
+            } else {
+                self.play_next();
             }
         }
+    }
+
+    pub fn check_repeat_mode(&mut self) {
+        self.repeat_mode = match self.repeat_mode {
+            RepeatMode::Off => RepeatMode::All,
+            RepeatMode::All => RepeatMode::One,
+            RepeatMode::One => RepeatMode::Off,
+        };
+    }
+
+    pub fn toggle_shuffle(&mut self) {
+        self.shuffle = !self.shuffle;
     }
 
     pub fn quit(&mut self) {

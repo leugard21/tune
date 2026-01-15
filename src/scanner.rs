@@ -1,22 +1,54 @@
+use lofty::prelude::*;
+use lofty::probe::Probe;
 use std::path::PathBuf;
 use walkdir::WalkDir;
 
 use crate::config::{Config, SUPPORTED_EXTENSIONS};
 
+#[derive(Clone, Debug)]
 pub struct Track {
     pub path: PathBuf,
-    pub name: String,
+    pub title: String,
+    pub artist: String,
+    pub filename: String,
 }
 
 impl Track {
     pub fn from_path(path: PathBuf) -> Self {
-        let name = path
+        let filename = path
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("Unknown")
             .to_string();
 
-        Self { path, name }
+        let mut title = filename.clone();
+        let mut artist = String::from("Unknown Artist");
+
+        if let Ok(tagged_file) = Probe::open(&path).and_then(|p| p.read()) {
+            if let Some(tag) = tagged_file.primary_tag() {
+                if let Some(t) = tag.title() {
+                    title = t.to_string();
+                }
+                if let Some(a) = tag.artist() {
+                    artist = a.to_string();
+                }
+            }
+        }
+
+        Self {
+            path,
+            title,
+            artist,
+            filename,
+        }
+    }
+
+    pub fn display_name(&self) -> String {
+        if self.artist != "Unknown Artist" {
+            format!("{} - {}", self.artist, self.title)
+        } else {
+            self.title.clone()
+        }
     }
 }
 
@@ -42,7 +74,12 @@ pub fn scan_music_directory(config: &Config) -> Vec<Track> {
         }
     }
 
-    tracks.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    tracks.sort_by(|a, b| {
+        a.artist
+            .to_lowercase()
+            .cmp(&b.artist.to_lowercase())
+            .then_with(|| a.title.to_lowercase().cmp(&b.title.to_lowercase()))
+    });
 
     tracks
 }

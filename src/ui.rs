@@ -48,7 +48,7 @@ fn render_playlist(frame: &mut Frame, app: &mut App, area: ratatui::layout::Rect
             };
 
             let prefix = if is_playing { "[>] " } else { "    " };
-            let content = format!("{}{}", prefix, track.name);
+            let content = format!("{}{}", prefix, track.display_name());
 
             ListItem::new(Line::from(Span::styled(content, style)))
         })
@@ -118,11 +118,21 @@ fn render_now_playing(frame: &mut Frame, app: &App, area: ratatui::layout::Rect)
 
 fn render_status_bar(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     let track_count = app.tracks.len();
+    let repeat_str = match app.repeat_mode {
+        crate::app::RepeatMode::Off => "",
+        crate::app::RepeatMode::All => "[Repeat: All] ",
+        crate::app::RepeatMode::One => "[Repeat: One] ",
+    };
+
+    let shuffle_str = if app.shuffle { "[Shuffle: ON] " } else { "" };
+
     let status_text = if track_count == 0 {
         String::from("No tracks found")
     } else {
         format!(
-            "Track {}/{} | [Enter] Play | [Space] Pause | [+/-] Vol | [LR] Seek | [q] Quit",
+            "{}{}Track {}/{} | [Enter] Play | [Space] Pause | [+/-] Vol | [LR] Seek | [z] Shuf | [r] Rep | [q] Quit",
+            shuffle_str,
+            repeat_str,
             app.selected() + 1,
             track_count
         )
