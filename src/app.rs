@@ -19,6 +19,19 @@ impl Default for RepeatMode {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum SortMode {
+    Filename,
+    Title,
+    Artist,
+}
+
+impl Default for SortMode {
+    fn default() -> Self {
+        Self::Filename
+    }
+}
+
 pub struct App {
     pub tracks: Vec<Track>,
     pub list_state: ListState,
@@ -27,6 +40,8 @@ pub struct App {
     pub running: bool,
     pub repeat_mode: RepeatMode,
     pub shuffle: bool,
+    pub sort_mode: SortMode,
+    pub show_help: bool,
 }
 
 use crate::state::AppState;
@@ -66,6 +81,8 @@ impl App {
             running: true,
             repeat_mode: state.repeat_mode,
             shuffle: state.shuffle,
+            sort_mode: state.sort_mode,
+            show_help: false,
         }
     }
 
@@ -79,6 +96,7 @@ impl App {
             volume: self.player.volume,
             shuffle: self.shuffle,
             repeat_mode: self.repeat_mode,
+            sort_mode: self.sort_mode,
             last_track_path,
         };
         state.save();
@@ -204,5 +222,40 @@ impl App {
 
     pub fn toggle_shuffle(&mut self) {
         self.shuffle = !self.shuffle;
+    }
+
+    pub fn toggle_help(&mut self) {
+        self.show_help = !self.show_help;
+    }
+
+    pub fn cycle_sort_mode(&mut self) {
+        self.sort_mode = match self.sort_mode {
+            SortMode::Filename => SortMode::Title,
+            SortMode::Title => SortMode::Artist,
+            SortMode::Artist => SortMode::Filename,
+        };
+        self.sort_tracks();
+    }
+
+    pub fn sort_tracks(&mut self) {
+        let current_track_path = self.playing_index.map(|i| self.tracks[i].path.clone());
+
+        match self.sort_mode {
+            SortMode::Filename => self.tracks.sort_by(|a, b| a.path.cmp(&b.path)),
+            SortMode::Title => self
+                .tracks
+                .sort_by(|a, b| a.title.to_lowercase().cmp(&b.title.to_lowercase())),
+            SortMode::Artist => self
+                .tracks
+                .sort_by(|a, b| a.artist.to_lowercase().cmp(&b.artist.to_lowercase())),
+        }
+
+        if let Some(path) = current_track_path {
+            self.playing_index = self.tracks.iter().position(|t| t.path == path);
+        }
+
+        if self.list_state.selected().is_none() && !self.tracks.is_empty() {
+            self.list_state.select(Some(0));
+        }
     }
 }

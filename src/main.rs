@@ -19,11 +19,13 @@ use config::Config;
 use scanner::scan_music_directory;
 
 fn main() -> io::Result<()> {
-    let config = Config::new();
+    let music_dir = std::env::args().nth(1).map(std::path::PathBuf::from);
+    let config = Config::new(music_dir);
 
     let tracks = scan_music_directory(&config);
 
     let mut app = App::new(tracks);
+    app.sort_tracks();
 
     enable_raw_mode()?;
     let mut stdout = io::stdout();

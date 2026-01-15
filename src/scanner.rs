@@ -10,6 +10,7 @@ pub struct Track {
     pub path: PathBuf,
     pub title: String,
     pub artist: String,
+    pub duration: u64,
 }
 
 impl Track {
@@ -22,8 +23,10 @@ impl Track {
 
         let mut title = filename.clone();
         let mut artist = String::from("Unknown Artist");
+        let mut duration = 0;
 
         if let Ok(tagged_file) = Probe::open(&path).and_then(|p| p.read()) {
+            duration = tagged_file.properties().duration().as_secs();
             if let Some(tag) = tagged_file.primary_tag() {
                 if let Some(t) = tag.title() {
                     title = t.to_string();
@@ -38,6 +41,7 @@ impl Track {
             path: path.to_path_buf(),
             title,
             artist,
+            duration,
         }
     }
 

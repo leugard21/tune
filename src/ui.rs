@@ -22,6 +22,11 @@ pub fn render(frame: &mut Frame, app: &mut App) {
     render_playlist(frame, app, chunks[0]);
     render_now_playing(frame, app, chunks[1]);
     render_status_bar(frame, app, chunks[2]);
+
+    if app.show_help {
+        let area = centered_rect(60, 60, frame.area());
+        render_help_overlay(frame, area);
+    }
 }
 
 fn render_playlist(frame: &mut Frame, app: &mut App, area: ratatui::layout::Rect) {
@@ -97,11 +102,19 @@ fn render_now_playing(frame: &mut Frame, app: &App, area: ratatui::layout::Rect)
     let elapsed_mins = elapsed_secs / 60;
     let elapsed_secs = elapsed_secs % 60;
 
+    let total_duration_secs = if let Some(index) = app.playing_index {
+        app.tracks[index].duration
+    } else {
+        0
+    };
+    let total_mins = total_duration_secs / 60;
+    let total_secs = total_duration_secs % 60;
+
     let vol_percent = (app.player.volume * 100.0) as u8;
 
     let stats_text = format!(
-        "{:02}:{:02} | Vol: {}%",
-        elapsed_mins, elapsed_secs, vol_percent
+        "{:02}:{:02} / {:02}:{:02} | Vol: {}%",
+        elapsed_mins, elapsed_secs, total_mins, total_secs, vol_percent
     );
 
     let stats_display = Paragraph::new(stats_text).style(Style::default().fg(Color::Cyan));
@@ -125,12 +138,18 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) 
     };
 
     let shuffle_str = if app.shuffle { "[Shuffle: ON] " } else { "" };
+    let sort_str = match app.sort_mode {
+        crate::app::SortMode::Filename => "[Sort: File] ",
+        crate::app::SortMode::Title => "[Sort: Title] ",
+        crate::app::SortMode::Artist => "[Sort: Artist] ",
+    };
 
     let status_text = if track_count == 0 {
         String::from("No tracks found")
     } else {
         format!(
-            "{}{}Track {}/{} | [Enter] Play | [Space] Pause | [+/-] Vol | [LR] Seek | [z] Shuf | [r] Rep | [q] Quit",
+            "{}{}{}Track {}/{} | [h] Help | [q] Quit",
+            sort_str,
             shuffle_str,
             repeat_str,
             app.selected() + 1,
@@ -143,9 +162,66 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) 
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title(" Controls ")
+                .title(" Status ")
                 .border_style(Style::default().fg(Color::DarkGray)),
         );
 
     frame.render_widget(status, area);
+}
+
+fn render_help_overlay(frame: &mut Frame, area: ratatui::layout::Rect) {
+    let help_text = vec![
+        "      Controls",
+        "--------------------",
+        " k / Up    : Selection Up",
+        " j / Down  : Selection Down",
+        " Enter     : Play Track",
+        " Space     : Pause / Resume",
+        " s         : Stop",
+        " + / =     : Volume Up",
+        " -         : Volume Down",
+        " Left      : Seek Back 5s",
+        " Right     : Seek Forward 5s",
+        " z         : Toggle Shuffle",
+        " r         : Cycle Repeat",
+        " o         : Cycle Sort",
+        " h / Esc   : Close Help",
+        " q         : Quit",
+    ];
+
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(" Help ")
+        .style(Style::default().bg(Color::Blue).fg(Color::White));
+
+    let paragraph = Paragraph::new(help_text.join("\n"))
+        .block(block)
+        .style(Style::default().fg(Color::White));
+
+    frame.render_widget(ratatui::widgets::Clear, area);
+    frame.render_widget(paragraph, area);
+}
+
+fn centered_rect(
+    percent_x: u16,
+    percent_y: u16,
+    r: ratatui::layout::Rect,
+) -> ratatui::layout::Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Percentage(percent_y),
+            Constraint::Percentage((100 - percent_y) / 2),
+        ])
+        .split(r);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(popup_layout[1])[1]
 }

@@ -1,4 +1,4 @@
-use crate::app::RepeatMode;
+use crate::app::{RepeatMode, SortMode};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -8,6 +8,7 @@ pub struct AppState {
     pub volume: f32,
     pub shuffle: bool,
     pub repeat_mode: RepeatMode,
+    pub sort_mode: SortMode,
     pub last_track_path: Option<PathBuf>,
 }
 
@@ -17,6 +18,7 @@ impl Default for AppState {
             volume: 1.0,
             shuffle: false,
             repeat_mode: RepeatMode::Off,
+            sort_mode: SortMode::Filename,
             last_track_path: None,
         }
     }

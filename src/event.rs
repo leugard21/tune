@@ -17,14 +17,39 @@ pub fn handle_events(app: &mut App) -> std::io::Result<bool> {
 }
 
 fn handle_key(app: &mut App, code: KeyCode) {
+    if app.show_help {
+        match code {
+            KeyCode::Char('h') | KeyCode::Esc => {
+                app.toggle_help();
+                return;
+            }
+            _ => {}
+        }
+    }
+
     match code {
         KeyCode::Char('q') => app.quit(),
+        KeyCode::Char('h') => app.toggle_help(),
+        KeyCode::Char('o') => app.cycle_sort_mode(),
+
         KeyCode::Char(' ') => app.toggle_pause(),
         KeyCode::Char('s') => app.stop(),
 
-        KeyCode::Down | KeyCode::Char('j') => app.select_next(),
-        KeyCode::Up | KeyCode::Char('k') => app.select_previous(),
-        KeyCode::Enter => app.play_selected(),
+        KeyCode::Down | KeyCode::Char('j') => {
+            if !app.show_help {
+                app.select_next()
+            }
+        }
+        KeyCode::Up | KeyCode::Char('k') => {
+            if !app.show_help {
+                app.select_previous()
+            }
+        }
+        KeyCode::Enter => {
+            if !app.show_help {
+                app.play_selected()
+            }
+        }
 
         KeyCode::Char('+') | KeyCode::Char('=') => app.change_volume(true),
         KeyCode::Char('-') => app.change_volume(false),
