@@ -1,5 +1,3 @@
-// Event handling module
-
 use std::time::Duration;
 
 use crossterm::event::{self, Event, KeyCode, KeyEventKind};
@@ -25,6 +23,12 @@ fn handle_key(app: &mut App, code: KeyCode) {
         KeyCode::Up | KeyCode::Char('k') => app.select_previous(),
 
         KeyCode::Down | KeyCode::Char('j') => app.select_next(),
+
+        KeyCode::Enter => app.play_selected(),
+
+        KeyCode::Char(' ') => app.toggle_pause(),
+
+        KeyCode::Char('s') => app.stop(),
 
         _ => {}
     }
