@@ -10,7 +10,6 @@ pub struct Track {
     pub path: PathBuf,
     pub title: String,
     pub artist: String,
-    pub filename: String,
 }
 
 impl Track {
@@ -36,10 +35,9 @@ impl Track {
         }
 
         Self {
-            path,
+            path: path.to_path_buf(),
             title,
             artist,
-            filename,
         }
     }
 
