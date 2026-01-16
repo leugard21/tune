@@ -60,6 +60,25 @@ fn handle_key(app: &mut App, code: KeyCode) {
         KeyCode::Char('r') => app.check_repeat_mode(),
         KeyCode::Char('z') => app.toggle_shuffle(),
 
+        KeyCode::Char('m') => app.toggle_mute(),
+
+        KeyCode::Char('[') => app.play_previous_track(),
+        KeyCode::Char(']') => app.play_next_track(),
+
+        KeyCode::Char('J') => app.seek_by(-10),
+        KeyCode::Char('K') => app.seek_by(10),
+
+        KeyCode::Char('0') => app.seek_percentage(0),
+        KeyCode::Char('1') => app.seek_percentage(10),
+        KeyCode::Char('2') => app.seek_percentage(20),
+        KeyCode::Char('3') => app.seek_percentage(30),
+        KeyCode::Char('4') => app.seek_percentage(40),
+        KeyCode::Char('5') => app.seek_percentage(50),
+        KeyCode::Char('6') => app.seek_percentage(60),
+        KeyCode::Char('7') => app.seek_percentage(70),
+        KeyCode::Char('8') => app.seek_percentage(80),
+        KeyCode::Char('9') => app.seek_percentage(90),
+
         _ => {}
     }
 }

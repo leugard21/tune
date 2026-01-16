@@ -43,6 +43,8 @@ pub struct App {
     pub sort_mode: SortMode,
     pub show_help: bool,
     pub status_message: Option<(String, std::time::Instant)>,
+    pub queue: Vec<usize>,
+    pub queue_index: Option<usize>,
 }
 
 use crate::state::AppState;
@@ -74,6 +76,25 @@ impl App {
             None
         };
 
+        let mut queue: Vec<usize> = (0..tracks.len()).collect();
+        let mut queue_index = None;
+
+        if !tracks.is_empty() {
+            if let Some(path) = &state.last_track_path {
+                let current_index = tracks.iter().position(|t| &t.path == path);
+
+                if state.shuffle {
+                    let mut rng = rand::thread_rng();
+                    queue.shuffle(&mut rng);
+                    if let Some(idx) = current_index {
+                        queue_index = queue.iter().position(|&i| i == idx);
+                    }
+                } else {
+                    queue_index = current_index;
+                }
+            }
+        }
+
         Self {
             tracks,
             list_state,
@@ -85,6 +106,8 @@ impl App {
             sort_mode: state.sort_mode,
             show_help: false,
             status_message: None,
+            queue,
+            queue_index,
         }
     }
 
@@ -130,9 +153,12 @@ impl App {
         let index = self.selected();
         let track = &self.tracks[index];
 
-        match self.player.play(&track.path, &track.display_name()) {
+        match self.player.play(&track.path, &track.title) {
             Ok(_) => {
                 self.playing_index = Some(index);
+                if let Some(pos) = self.queue.iter().position(|&i| i == index) {
+                    self.queue_index = Some(pos);
+                }
             }
             Err(e) => {
                 self.set_status(format!("Error: {}", e));
@@ -145,30 +171,23 @@ impl App {
             return;
         }
 
-        let next_index = if self.repeat_mode == RepeatMode::One {
-            self.playing_index.unwrap_or(0)
-        } else if self.shuffle {
-            let mut rng = rand::thread_rng();
-            let current = self.playing_index.unwrap_or(0);
-            let mut indices: Vec<usize> = (0..self.tracks.len()).collect();
-            if indices.len() > 1 {
-                indices.retain(|&x| x != current);
-            }
-            *indices.choose(&mut rng).unwrap_or(&0)
-        } else {
-            let current_index = self.playing_index.unwrap_or(0);
-            if current_index + 1 >= self.tracks.len() {
-                if self.repeat_mode == RepeatMode::All {
-                    0
-                } else {
-                    return;
-                }
+        let current_q_idx = self.queue_index.unwrap_or(0);
+        let next_q_idx = current_q_idx + 1;
+
+        let final_q_idx = if next_q_idx >= self.queue.len() {
+            if self.repeat_mode == RepeatMode::All {
+                0
             } else {
-                current_index + 1
+                return;
             }
+        } else {
+            next_q_idx
         };
 
-        self.list_state.select(Some(next_index));
+        self.queue_index = Some(final_q_idx);
+        let track_idx = self.queue[final_q_idx];
+
+        self.list_state.select(Some(track_idx));
         self.play_selected();
     }
 
@@ -206,20 +225,63 @@ impl App {
         }
     }
 
+    pub fn toggle_mute(&mut self) {
+        self.player.toggle_mute();
+    }
+
     pub fn seek_forward(&mut self) {
-        let current = self.player.position();
-        let new_pos = current + std::time::Duration::from_secs(5);
-        self.player.seek(new_pos);
+        self.seek_by(5);
     }
 
     pub fn seek_backward(&mut self) {
+        self.seek_by(-5);
+    }
+
+    pub fn seek_by(&mut self, seconds: i64) {
         let current = self.player.position();
-        if current.as_secs() > 5 {
-            let new_pos = current - std::time::Duration::from_secs(5);
+        if seconds > 0 {
+            let new_pos = current + std::time::Duration::from_secs(seconds as u64);
             self.player.seek(new_pos);
         } else {
-            self.player.seek(std::time::Duration::ZERO);
+            let sub = seconds.abs() as u64;
+            if current.as_secs() > sub {
+                let new_pos = current - std::time::Duration::from_secs(sub);
+                self.player.seek(new_pos);
+            } else {
+                self.player.seek(std::time::Duration::ZERO);
+            }
         }
+    }
+
+    pub fn seek_percentage(&mut self, percent: u8) {
+        if let Some(index) = self.playing_index {
+            let duration = self.tracks[index].duration;
+            let secs = (duration as f64 * (percent as f64 / 100.0)) as u64;
+            self.player.seek(std::time::Duration::from_secs(secs));
+        }
+    }
+
+    pub fn play_previous_track(&mut self) {
+        let position = self.player.position();
+        if position.as_secs() > 3 {
+            self.player.seek(std::time::Duration::ZERO);
+        } else {
+            let current_q_idx = self.queue_index.unwrap_or(0);
+            let prev_q_idx = if current_q_idx > 0 {
+                current_q_idx - 1
+            } else {
+                self.queue.len() - 1
+            };
+
+            self.queue_index = Some(prev_q_idx);
+            let track_idx = self.queue[prev_q_idx];
+            self.list_state.select(Some(track_idx));
+            self.play_selected();
+        }
+    }
+
+    pub fn play_next_track(&mut self) {
+        self.play_next();
     }
 
     pub fn check_playback(&mut self) {
@@ -231,6 +293,11 @@ impl App {
                 self.playing_index = None;
                 self.player.state = PlaybackState::Stopped;
             } else {
+                if self.repeat_mode == RepeatMode::One {
+                    self.player.seek(std::time::Duration::ZERO);
+                    self.player.state = PlaybackState::Playing;
+                    return;
+                }
                 self.play_next();
             }
         }
@@ -246,6 +313,20 @@ impl App {
 
     pub fn toggle_shuffle(&mut self) {
         self.shuffle = !self.shuffle;
+
+        if self.shuffle {
+            let mut rng = rand::thread_rng();
+            self.queue.shuffle(&mut rng);
+
+            if let Some(current_idx) = self.playing_index {
+                if let Some(pos) = self.queue.iter().position(|&i| i == current_idx) {
+                    self.queue_index = Some(pos);
+                }
+            }
+        } else {
+            self.queue = (0..self.tracks.len()).collect();
+            self.queue_index = self.playing_index;
+        }
     }
 
     pub fn toggle_help(&mut self) {
@@ -276,6 +357,22 @@ impl App {
 
         if let Some(path) = current_track_path {
             self.playing_index = self.tracks.iter().position(|t| t.path == path);
+        }
+
+        if self.shuffle {
+            let mut rng = rand::thread_rng();
+            let mut new_queue: Vec<usize> = (0..self.tracks.len()).collect();
+            new_queue.shuffle(&mut rng);
+            self.queue = new_queue;
+
+            if let Some(current_idx) = self.playing_index {
+                if let Some(pos) = self.queue.iter().position(|&i| i == current_idx) {
+                    self.queue_index = Some(pos);
+                }
+            }
+        } else {
+            self.queue = (0..self.tracks.len()).collect();
+            self.queue_index = self.playing_index;
         }
 
         if self.list_state.selected().is_none() && !self.tracks.is_empty() {

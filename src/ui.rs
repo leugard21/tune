@@ -106,12 +106,36 @@ fn render_now_playing(frame: &mut Frame, app: &App, area: ratatui::layout::Rect)
         .as_deref()
         .unwrap_or("No track selected");
 
-    let info_text = format!("{} {} {}", state_icon, state_label, track_name);
-    let info = Paragraph::new(info_text).style(
-        Style::default()
-            .fg(state_color)
-            .add_modifier(Modifier::BOLD),
-    );
+    let next_track_info = if let Some(q_idx) = app.queue_index {
+        if q_idx + 1 < app.queue.len() {
+            let next_idx = app.queue[q_idx + 1];
+            format!("Next: {}", app.tracks[next_idx].title)
+        } else if app.repeat_mode == crate::app::RepeatMode::All && !app.queue.is_empty() {
+            let next_idx = app.queue[0];
+            format!("Next: {}", app.tracks[next_idx].title)
+        } else {
+            String::new()
+        }
+    } else {
+        String::new()
+    };
+
+    let info_text = if next_track_info.is_empty() {
+        format!("{} {} {}", state_icon, state_label, track_name)
+    } else {
+        format!(
+            "{} {} {}\n{}",
+            state_icon, state_label, track_name, next_track_info
+        )
+    };
+
+    let info = Paragraph::new(info_text)
+        .style(
+            Style::default()
+                .fg(state_color)
+                .add_modifier(Modifier::BOLD),
+        )
+        .alignment(ratatui::layout::Alignment::Center);
 
     let elapsed_secs = position.as_secs();
     let total_duration_secs = if let Some(index) = app.playing_index {
@@ -148,9 +172,20 @@ fn render_now_playing(frame: &mut Frame, app: &App, area: ratatui::layout::Rect)
         .alignment(ratatui::layout::Alignment::Center);
 
     let vol_percent = (app.player.volume * 100.0) as u8;
-    let vol_text = format!("Volume: {}%", vol_percent);
+    let vol_text = if app.player.muted {
+        "Volume: Muted".to_string()
+    } else {
+        format!("Volume: {}%", vol_percent)
+    };
+
+    let vol_style = if app.player.muted {
+        Style::default().fg(Color::Rgb(255, 100, 100))
+    } else {
+        Style::default().fg(Color::Rgb(150, 200, 255))
+    };
+
     let vol_display = Paragraph::new(vol_text)
-        .style(Style::default().fg(Color::Rgb(150, 200, 255)))
+        .style(vol_style)
         .alignment(ratatui::layout::Alignment::Center);
 
     let block = Block::default()
@@ -269,7 +304,21 @@ fn render_help_overlay(frame: &mut Frame, area: ratatui::layout::Rect) {
                 " ← / →      ",
                 Style::default().fg(Color::Rgb(255, 200, 100)),
             ),
-            Span::raw("Seek backward / forward 5s"),
+            Span::raw("Seek 5s | Shift+←/→ Seek 10s"),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                " 0 - 9      ",
+                Style::default().fg(Color::Rgb(255, 200, 100)),
+            ),
+            Span::raw("Jump to 0% - 90%"),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                " [ / ]      ",
+                Style::default().fg(Color::Rgb(255, 200, 100)),
+            ),
+            Span::raw("Previous / Next Track"),
         ]),
         Line::from(""),
         Line::from(vec![Span::styled(
@@ -291,6 +340,13 @@ fn render_help_overlay(frame: &mut Frame, area: ratatui::layout::Rect) {
                 Style::default().fg(Color::Rgb(255, 200, 100)),
             ),
             Span::raw("Decrease volume"),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                " m          ",
+                Style::default().fg(Color::Rgb(255, 200, 100)),
+            ),
+            Span::raw("Toggle mute"),
         ]),
         Line::from(vec![
             Span::styled(

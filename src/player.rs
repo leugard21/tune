@@ -17,6 +17,8 @@ pub struct Player {
     pub current_track: Option<String>,
     elapsed: Arc<Mutex<Duration>>,
     pub volume: f32,
+    pub muted: bool,
+    pub pre_mute_volume: f32,
 }
 
 impl Player {
@@ -33,6 +35,8 @@ impl Player {
             current_track: None,
             elapsed: Arc::new(Mutex::new(Duration::ZERO)),
             volume: 1.0,
+            muted: false,
+            pre_mute_volume: 1.0,
         })
     }
 
@@ -95,7 +99,8 @@ impl Player {
     }
 
     pub fn set_volume(&mut self, volume: f32) {
-        self.volume = volume.clamp(0.0, 1.0);
+        let rounded_volume = (volume * 10.0).round() / 10.0;
+        self.volume = rounded_volume.clamp(0.0, 1.0);
         self.sink.set_volume(self.volume);
     }
 
@@ -105,6 +110,17 @@ impl Player {
 
     pub fn decrease_volume(&mut self) {
         self.set_volume(self.volume - 0.1);
+    }
+
+    pub fn toggle_mute(&mut self) {
+        if self.muted {
+            self.set_volume(self.pre_mute_volume);
+            self.muted = false;
+        } else {
+            self.pre_mute_volume = self.volume;
+            self.set_volume(0.0);
+            self.muted = true;
+        }
     }
 
     pub fn seek(&mut self, duration: Duration) {
