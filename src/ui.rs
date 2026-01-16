@@ -3,7 +3,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, HighlightSpacing, List, ListItem, Paragraph},
+    widgets::{Block, Borders, Gauge, HighlightSpacing, List, ListItem, Paragraph},
 };
 
 use crate::app::App;
@@ -14,7 +14,7 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Min(3),
-            Constraint::Length(5),
+            Constraint::Length(7),
             Constraint::Length(3),
         ])
         .split(frame.area());
@@ -24,12 +24,12 @@ pub fn render(frame: &mut Frame, app: &mut App) {
     render_status_bar(frame, app, chunks[2]);
 
     if app.show_help {
-        let area = centered_rect(60, 60, frame.area());
+        let area = centered_rect(70, 70, frame.area());
         render_help_overlay(frame, area);
     }
 
     if let Some((msg, _)) = &app.status_message {
-        let area = centered_rect(40, 10, frame.area());
+        let area = centered_rect(50, 15, frame.area());
         render_status_overlay(frame, msg, area);
     }
 }
@@ -48,16 +48,16 @@ fn render_playlist(frame: &mut Frame, app: &mut App, area: ratatui::layout::Rect
 
             let style = match (is_selected, is_playing) {
                 (true, true) => Style::default()
-                    .fg(Color::Green)
+                    .fg(Color::Rgb(100, 255, 100))
                     .add_modifier(Modifier::BOLD),
                 (true, false) => Style::default()
-                    .fg(Color::Yellow)
+                    .fg(Color::Rgb(255, 200, 100))
                     .add_modifier(Modifier::BOLD),
-                (false, true) => Style::default().fg(Color::Green),
-                (false, false) => Style::default().fg(Color::White),
+                (false, true) => Style::default().fg(Color::Rgb(150, 255, 150)),
+                (false, false) => Style::default().fg(Color::Rgb(200, 200, 200)),
             };
 
-            let prefix = if is_playing { "[>] " } else { "    " };
+            let prefix = if is_playing { "▶ " } else { "  " };
             let content = format!("{}{}", prefix, track.display_name());
 
             ListItem::new(Line::from(Span::styled(content, style)))
@@ -69,10 +69,12 @@ fn render_playlist(frame: &mut Frame, app: &mut App, area: ratatui::layout::Rect
             Block::default()
                 .borders(Borders::ALL)
                 .title(" Playlist ")
-                .border_style(Style::default().fg(Color::Cyan)),
+                .border_style(Style::default().fg(Color::Rgb(100, 150, 255)))
+                .border_type(ratatui::widgets::BorderType::Rounded),
         )
-        .highlight_symbol("> ")
-        .highlight_spacing(HighlightSpacing::Always);
+        .highlight_symbol("▸ ")
+        .highlight_spacing(HighlightSpacing::Always)
+        .highlight_style(Style::default().add_modifier(Modifier::BOLD));
 
     frame.render_stateful_widget(list, area, &mut app.list_state);
 }
@@ -80,17 +82,22 @@ fn render_playlist(frame: &mut Frame, app: &mut App, area: ratatui::layout::Rect
 fn render_now_playing(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Length(2), Constraint::Length(1)])
+        .constraints([
+            Constraint::Length(2),
+            Constraint::Length(1),
+            Constraint::Length(1),
+            Constraint::Length(1),
+        ])
         .margin(1)
         .split(area);
 
     let state = app.player.state;
     let position = app.player.position();
 
-    let (state_label, state_color) = match state {
-        PlaybackState::Playing => ("Playing", Color::Green),
-        PlaybackState::Paused => ("Paused", Color::Yellow),
-        PlaybackState::Stopped => ("Stopped", Color::Gray),
+    let (state_label, state_color, state_icon) = match state {
+        PlaybackState::Playing => ("Playing", Color::Rgb(100, 255, 100), "▶"),
+        PlaybackState::Paused => ("Paused", Color::Rgb(255, 200, 100), "⏸"),
+        PlaybackState::Stopped => ("Stopped", Color::Rgb(150, 150, 150), "⏹"),
     };
 
     let track_name = app
@@ -99,39 +106,64 @@ fn render_now_playing(frame: &mut Frame, app: &App, area: ratatui::layout::Rect)
         .as_deref()
         .unwrap_or("No track selected");
 
-    let info_text = format!("[{}] {}", state_label, track_name);
-
-    let info = Paragraph::new(info_text).style(Style::default().fg(state_color));
+    let info_text = format!("{} {} {}", state_icon, state_label, track_name);
+    let info = Paragraph::new(info_text).style(
+        Style::default()
+            .fg(state_color)
+            .add_modifier(Modifier::BOLD),
+    );
 
     let elapsed_secs = position.as_secs();
-    let elapsed_mins = elapsed_secs / 60;
-    let elapsed_secs = elapsed_secs % 60;
-
     let total_duration_secs = if let Some(index) = app.playing_index {
         app.tracks[index].duration
     } else {
         0
     };
+
+    let progress_ratio = if total_duration_secs > 0 {
+        elapsed_secs as f64 / total_duration_secs as f64
+    } else {
+        0.0
+    };
+
+    let gauge = Gauge::default()
+        .gauge_style(
+            Style::default()
+                .fg(Color::Rgb(100, 200, 255))
+                .bg(Color::Rgb(40, 40, 40)),
+        )
+        .ratio(progress_ratio);
+
+    let elapsed_mins = elapsed_secs / 60;
+    let elapsed_sec = elapsed_secs % 60;
     let total_mins = total_duration_secs / 60;
-    let total_secs = total_duration_secs % 60;
+    let total_sec = total_duration_secs % 60;
+
+    let time_text = format!(
+        "{:02}:{:02} / {:02}:{:02}",
+        elapsed_mins, elapsed_sec, total_mins, total_sec
+    );
+    let time_display = Paragraph::new(time_text)
+        .style(Style::default().fg(Color::Rgb(150, 150, 150)))
+        .alignment(ratatui::layout::Alignment::Center);
 
     let vol_percent = (app.player.volume * 100.0) as u8;
-
-    let stats_text = format!(
-        "{:02}:{:02} / {:02}:{:02} | Vol: {}%",
-        elapsed_mins, elapsed_secs, total_mins, total_secs, vol_percent
-    );
-
-    let stats_display = Paragraph::new(stats_text).style(Style::default().fg(Color::Cyan));
+    let vol_text = format!("Volume: {}%", vol_percent);
+    let vol_display = Paragraph::new(vol_text)
+        .style(Style::default().fg(Color::Rgb(150, 200, 255)))
+        .alignment(ratatui::layout::Alignment::Center);
 
     let block = Block::default()
         .borders(Borders::ALL)
         .title(" Now Playing ")
-        .border_style(Style::default().fg(Color::Magenta));
+        .border_style(Style::default().fg(Color::Rgb(255, 100, 200)))
+        .border_type(ratatui::widgets::BorderType::Rounded);
 
     frame.render_widget(block, area);
     frame.render_widget(info, chunks[0]);
-    frame.render_widget(stats_display, chunks[1]);
+    frame.render_widget(gauge, chunks[1]);
+    frame.render_widget(time_display, chunks[2]);
+    frame.render_widget(vol_display, chunks[3]);
 }
 
 fn render_status_bar(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
@@ -142,7 +174,7 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) 
         crate::app::RepeatMode::One => "[Repeat: One] ",
     };
 
-    let shuffle_str = if app.shuffle { "[Shuffle: ON] " } else { "" };
+    let shuffle_str = if app.shuffle { "[Shuffle] " } else { "" };
     let sort_str = match app.sort_mode {
         crate::app::SortMode::Filename => "[Sort: File] ",
         crate::app::SortMode::Title => "[Sort: Title] ",
@@ -163,12 +195,13 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) 
     };
 
     let status = Paragraph::new(status_text)
-        .style(Style::default().fg(Color::Gray))
+        .style(Style::default().fg(Color::Rgb(180, 180, 180)))
         .block(
             Block::default()
                 .borders(Borders::ALL)
                 .title(" Status ")
-                .border_style(Style::default().fg(Color::DarkGray)),
+                .border_style(Style::default().fg(Color::Rgb(100, 100, 150)))
+                .border_type(ratatui::widgets::BorderType::Rounded),
         );
 
     frame.render_widget(status, area);
@@ -176,32 +209,137 @@ fn render_status_bar(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) 
 
 fn render_help_overlay(frame: &mut Frame, area: ratatui::layout::Rect) {
     let help_text = vec![
-        "      Controls",
-        "--------------------",
-        " k / Up    : Selection Up",
-        " j / Down  : Selection Down",
-        " Enter     : Play Track",
-        " Space     : Pause / Resume",
-        " s         : Stop",
-        " + / =     : Volume Up",
-        " -         : Volume Down",
-        " Left      : Seek Back 5s",
-        " Right     : Seek Forward 5s",
-        " z         : Toggle Shuffle",
-        " r         : Cycle Repeat",
-        " o         : Cycle Sort",
-        " h / Esc   : Close Help",
-        " q         : Quit",
+        Line::from(vec![Span::styled(
+            "      Controls",
+            Style::default()
+                .add_modifier(Modifier::BOLD)
+                .fg(Color::Rgb(100, 200, 255)),
+        )]),
+        Line::from(""),
+        Line::from(vec![Span::styled(
+            " Navigation",
+            Style::default()
+                .add_modifier(Modifier::UNDERLINED)
+                .fg(Color::Rgb(150, 255, 150)),
+        )]),
+        Line::from(vec![
+            Span::styled(
+                " k / ↑      ",
+                Style::default().fg(Color::Rgb(255, 200, 100)),
+            ),
+            Span::raw("Move selection up"),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                " j / ↓      ",
+                Style::default().fg(Color::Rgb(255, 200, 100)),
+            ),
+            Span::raw("Move selection down"),
+        ]),
+        Line::from(""),
+        Line::from(vec![Span::styled(
+            " Playback",
+            Style::default()
+                .add_modifier(Modifier::UNDERLINED)
+                .fg(Color::Rgb(150, 255, 150)),
+        )]),
+        Line::from(vec![
+            Span::styled(
+                " Enter      ",
+                Style::default().fg(Color::Rgb(255, 200, 100)),
+            ),
+            Span::raw("Play selected track"),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                " Space      ",
+                Style::default().fg(Color::Rgb(255, 200, 100)),
+            ),
+            Span::raw("Pause / Resume"),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                " s          ",
+                Style::default().fg(Color::Rgb(255, 200, 100)),
+            ),
+            Span::raw("Stop playback"),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                " ← / →      ",
+                Style::default().fg(Color::Rgb(255, 200, 100)),
+            ),
+            Span::raw("Seek backward / forward 5s"),
+        ]),
+        Line::from(""),
+        Line::from(vec![Span::styled(
+            " Settings",
+            Style::default()
+                .add_modifier(Modifier::UNDERLINED)
+                .fg(Color::Rgb(150, 255, 150)),
+        )]),
+        Line::from(vec![
+            Span::styled(
+                " + / =      ",
+                Style::default().fg(Color::Rgb(255, 200, 100)),
+            ),
+            Span::raw("Increase volume"),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                " -          ",
+                Style::default().fg(Color::Rgb(255, 200, 100)),
+            ),
+            Span::raw("Decrease volume"),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                " z          ",
+                Style::default().fg(Color::Rgb(255, 200, 100)),
+            ),
+            Span::raw("Toggle shuffle"),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                " r          ",
+                Style::default().fg(Color::Rgb(255, 200, 100)),
+            ),
+            Span::raw("Cycle repeat mode"),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                " o          ",
+                Style::default().fg(Color::Rgb(255, 200, 100)),
+            ),
+            Span::raw("Cycle sort mode"),
+        ]),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(
+                " h / Esc    ",
+                Style::default().fg(Color::Rgb(255, 200, 100)),
+            ),
+            Span::raw("Close help"),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                " q          ",
+                Style::default().fg(Color::Rgb(255, 200, 100)),
+            ),
+            Span::raw("Quit application"),
+        ]),
     ];
 
     let block = Block::default()
         .borders(Borders::ALL)
         .title(" Help ")
-        .style(Style::default().bg(Color::Blue).fg(Color::White));
+        .style(Style::default().bg(Color::Rgb(20, 20, 40)))
+        .border_style(Style::default().fg(Color::Rgb(100, 150, 255)))
+        .border_type(ratatui::widgets::BorderType::Rounded);
 
-    let paragraph = Paragraph::new(help_text.join("\n"))
+    let paragraph = Paragraph::new(help_text)
         .block(block)
-        .style(Style::default().fg(Color::White));
+        .style(Style::default().fg(Color::Rgb(220, 220, 220)));
 
     frame.render_widget(ratatui::widgets::Clear, area);
     frame.render_widget(paragraph, area);
@@ -211,11 +349,13 @@ fn render_status_overlay(frame: &mut Frame, msg: &str, area: ratatui::layout::Re
     let block = Block::default()
         .borders(Borders::ALL)
         .title(" Message ")
-        .border_style(Style::default().fg(Color::Yellow));
+        .border_style(Style::default().fg(Color::Rgb(255, 200, 100)))
+        .border_type(ratatui::widgets::BorderType::Rounded)
+        .style(Style::default().bg(Color::Rgb(40, 30, 20)));
 
     let paragraph = Paragraph::new(msg)
         .block(block)
-        .style(Style::default().fg(Color::Yellow))
+        .style(Style::default().fg(Color::Rgb(255, 220, 150)))
         .alignment(ratatui::layout::Alignment::Center);
 
     frame.render_widget(ratatui::widgets::Clear, area);

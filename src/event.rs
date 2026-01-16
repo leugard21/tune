@@ -5,7 +5,7 @@ use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use crate::app::App;
 
 pub fn handle_events(app: &mut App) -> std::io::Result<bool> {
-    if event::poll(Duration::from_millis(100))? {
+    if event::poll(Duration::from_millis(33))? {
         if let Event::Key(key) = event::read()? {
             if key.kind == KeyEventKind::Press {
                 handle_key(app, key.code);

@@ -1,4 +1,3 @@
-use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -37,7 +36,7 @@ impl Player {
         })
     }
 
-    pub fn play(&mut self, path: &Path, track_name: &str) -> Result<(), String> {
+    pub fn play(&mut self, path: &std::path::Path, track_name: &str) -> Result<(), String> {
         self.stop();
 
         let file_bytes = std::fs::read(path).map_err(|e| format!("Failed to read file: {}", e))?;

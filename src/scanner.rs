@@ -27,6 +27,7 @@ impl Track {
 
         if let Ok(tagged_file) = Probe::open(&path).and_then(|p| p.read()) {
             duration = tagged_file.properties().duration().as_secs();
+
             if let Some(tag) = tagged_file.primary_tag() {
                 if let Some(t) = tag.title() {
                     title = t.to_string();

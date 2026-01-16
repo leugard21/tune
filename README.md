@@ -44,6 +44,8 @@ The player scans the Music directory (`~/Music` or configured path) for supporte
 | Right    | Seek forward 5s                       |
 | z        | Toggle Shuffle                        |
 | r        | Cycle Repeat Mode (Off -> All -> One) |
+| o        | Cycle Sort Mode                       |
+| h        | Toggle Help                           |
 | q        | Quit                                  |
 
 ## License
