@@ -1,5 +1,6 @@
 use lofty::prelude::*;
 use lofty::probe::Probe;
+use lofty::tag::ItemKey;
 use std::path::PathBuf;
 use walkdir::WalkDir;
 
@@ -11,6 +12,7 @@ pub struct Track {
     pub title: String,
     pub artist: String,
     pub duration: u64,
+    pub lyrics: Option<String>,
 }
 
 impl Track {
@@ -24,6 +26,7 @@ impl Track {
         let mut title = filename.clone();
         let mut artist = String::from("Unknown Artist");
         let mut duration = 0;
+        let mut lyrics = None;
 
         if let Ok(tagged_file) = Probe::open(&path).and_then(|p| p.read()) {
             duration = tagged_file.properties().duration().as_secs();
@@ -35,6 +38,7 @@ impl Track {
                 if let Some(a) = tag.artist() {
                     artist = a.to_string();
                 }
+                lyrics = tag.get_string(&ItemKey::Lyrics).map(|s| s.to_string());
             }
         }
 
@@ -43,6 +47,7 @@ impl Track {
             title,
             artist,
             duration,
+            lyrics,
         }
     }
 

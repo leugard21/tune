@@ -42,6 +42,7 @@ pub struct App {
     pub shuffle: bool,
     pub sort_mode: SortMode,
     pub show_help: bool,
+    pub show_lyrics: bool,
     pub status_message: Option<(String, std::time::Instant)>,
     pub queue: Vec<usize>,
     pub queue_index: Option<usize>,
@@ -105,6 +106,7 @@ impl App {
             shuffle: state.shuffle,
             sort_mode: state.sort_mode,
             show_help: false,
+            show_lyrics: false,
             status_message: None,
             queue,
             queue_index,
@@ -331,6 +333,16 @@ impl App {
 
     pub fn toggle_help(&mut self) {
         self.show_help = !self.show_help;
+        if self.show_help {
+            self.show_lyrics = false;
+        }
+    }
+
+    pub fn toggle_lyrics(&mut self) {
+        self.show_lyrics = !self.show_lyrics;
+        if self.show_lyrics {
+            self.show_help = false;
+        }
     }
 
     pub fn cycle_sort_mode(&mut self) {

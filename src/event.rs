@@ -27,9 +27,20 @@ fn handle_key(app: &mut App, code: KeyCode) {
         }
     }
 
+    if app.show_lyrics {
+        match code {
+            KeyCode::Char('l') | KeyCode::Esc => {
+                app.toggle_lyrics();
+                return;
+            }
+            _ => {}
+        }
+    }
+
     match code {
         KeyCode::Char('q') => app.quit(),
         KeyCode::Char('h') => app.toggle_help(),
+        KeyCode::Char('l') => app.toggle_lyrics(),
         KeyCode::Char('o') => app.cycle_sort_mode(),
 
         KeyCode::Char(' ') => app.toggle_pause(),

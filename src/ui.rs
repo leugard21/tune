@@ -19,7 +19,11 @@ pub fn render(frame: &mut Frame, app: &mut App) {
         ])
         .split(frame.area());
 
-    render_playlist(frame, app, chunks[0]);
+    if app.show_lyrics {
+        render_lyrics(frame, app, chunks[0]);
+    } else {
+        render_playlist(frame, app, chunks[0]);
+    }
     render_now_playing(frame, app, chunks[1]);
     render_status_bar(frame, app, chunks[2]);
 
@@ -77,6 +81,143 @@ fn render_playlist(frame: &mut Frame, app: &mut App, area: ratatui::layout::Rect
         .highlight_style(Style::default().add_modifier(Modifier::BOLD));
 
     frame.render_stateful_widget(list, area, &mut app.list_state);
+}
+
+fn parse_lrc(lrc: &str) -> Vec<(std::time::Duration, String)> {
+    let mut lines = Vec::new();
+    for line in lrc.lines() {
+        let line = line.trim();
+        if line.is_empty() || !line.starts_with('[') {
+            continue;
+        }
+
+        let parts: Vec<&str> = line.split(']').collect();
+        if parts.len() < 2 {
+            continue;
+        }
+
+        let time_part = parts[0].trim_start_matches('[');
+        let text = parts[1..].join("]").trim().to_string();
+
+        let time_split: Vec<&str> = time_part.split(':').collect();
+        if time_split.len() == 2 {
+            let mins: u64 = time_split[0].parse().unwrap_or(0);
+            let secs_split: Vec<&str> = time_split[1].split('.').collect();
+            let secs: u64 = secs_split[0].parse().unwrap_or(0);
+            let millis: u64 = if secs_split.len() > 1 {
+                let ms_str = secs_split[1];
+                let ms_val: u64 = ms_str.parse().unwrap_or(0);
+                match ms_str.len() {
+                    1 => ms_val * 100,
+                    2 => ms_val * 10,
+                    _ => ms_val,
+                }
+            } else {
+                0
+            };
+            let duration =
+                std::time::Duration::from_millis(mins * 60 * 1000 + secs * 1000 + millis);
+            lines.push((duration, text));
+        }
+    }
+    lines
+}
+
+fn render_lyrics(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .title(" Lyrics ")
+        .border_style(Style::default().fg(Color::Rgb(255, 150, 100)))
+        .border_type(ratatui::widgets::BorderType::Rounded);
+
+    let (track, raw_lyrics) = if let Some(index) = app.playing_index {
+        let t = &app.tracks[index];
+        (Some(t), t.lyrics.as_deref())
+    } else {
+        (None, None)
+    };
+
+    if track.is_none() {
+        let paragraph = Paragraph::new("No track playing.")
+            .block(block)
+            .alignment(ratatui::layout::Alignment::Center);
+        frame.render_widget(paragraph, area);
+        return;
+    }
+
+    let raw_lyrics = if let Some(l) = raw_lyrics {
+        l
+    } else {
+        let paragraph = Paragraph::new("No lyrics found for this track.")
+            .block(block)
+            .alignment(ratatui::layout::Alignment::Center);
+        frame.render_widget(paragraph, area);
+        return;
+    };
+
+    let parsed_lyrics = parse_lrc(raw_lyrics);
+
+    if parsed_lyrics.is_empty() {
+        let paragraph = Paragraph::new(raw_lyrics)
+            .block(block)
+            .style(Style::default().fg(Color::Rgb(240, 240, 240)))
+            .alignment(ratatui::layout::Alignment::Center)
+            .wrap(ratatui::widgets::Wrap { trim: true });
+        frame.render_widget(paragraph, area);
+        return;
+    }
+
+    let current_time = app.player.position();
+
+    // Find active line index
+    let active_idx = parsed_lyrics
+        .iter()
+        .position(|(time, _)| *time > current_time)
+        .map(|idx| idx.saturating_sub(1))
+        .unwrap_or(parsed_lyrics.len().saturating_sub(1));
+
+    // Calculate viewable area
+    let inner_area = block.inner(area);
+    let height = inner_area.height as usize;
+    let mid = height / 2;
+
+    let start_idx = active_idx.saturating_sub(mid);
+    let end_idx = (start_idx + height).min(parsed_lyrics.len());
+
+    // Adjust start_idx if we're near the end to keep the view full
+    let start_idx = if end_idx == parsed_lyrics.len() {
+        end_idx.saturating_sub(height)
+    } else {
+        start_idx
+    };
+
+    let mut lines = Vec::new();
+    for i in start_idx..end_idx {
+        let (_, text) = &parsed_lyrics[i];
+        let style = if i == active_idx {
+            Style::default()
+                .fg(Color::Rgb(255, 255, 100))
+                .add_modifier(Modifier::BOLD)
+        } else {
+            // Distance-based dimming for "animation" feel
+            let dist = (i as i32 - active_idx as i32).abs();
+            let intensity = match dist {
+                0 => 255,
+                1 => 200,
+                2 => 150,
+                3 => 100,
+                _ => 60,
+            };
+            Style::default().fg(Color::Rgb(intensity, intensity, intensity))
+        };
+        lines.push(Line::from(Span::styled(text, style)));
+    }
+
+    let paragraph = Paragraph::new(lines)
+        .block(block)
+        .alignment(ratatui::layout::Alignment::Center);
+
+    frame.render_widget(paragraph, area);
 }
 
 fn render_now_playing(frame: &mut Frame, app: &App, area: ratatui::layout::Rect) {
@@ -368,6 +509,13 @@ fn render_help_overlay(frame: &mut Frame, area: ratatui::layout::Rect) {
                 Style::default().fg(Color::Rgb(255, 200, 100)),
             ),
             Span::raw("Cycle sort mode"),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                " l          ",
+                Style::default().fg(Color::Rgb(255, 200, 100)),
+            ),
+            Span::raw("Toggle lyrics"),
         ]),
         Line::from(""),
         Line::from(vec![
